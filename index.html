@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smile Rewards AI (Gemini Integrated)</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- face-api.js for face detection -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .glowing-text {
+            animation: glowing 2s infinite;
+        }
+        @keyframes glowing {
+            0% { text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #2dd4bf, 0 0 20px #2dd4bf; }
+            50% { text-shadow: 0 0 10px #fff, 0 0 20px #2dd4bf, 0 0 30px #2dd4bf, 0 0 40px #2dd4bf; }
+            100% { text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #2dd4bf, 0 0 20px #2dd4bf; }
+        }
+        .point-pop {
+            animation: pop 0.5s ease-out;
+        }
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.25); }
+            100% { transform: scale(1); }
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 720px;
+            aspect-ratio: 16 / 9;
+            border-radius: 1rem;
+            overflow: hidden;
+        }
+        #video, #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #video {
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        #smile-meter-bar {
+            transition: width 0.3s ease-in-out;
+        }
+        /* Modal styles */
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+        .modal-content {
+            transition: transform 0.25s ease;
+        }
+        /* ✨ Floating Quotes Background Styles ✨ */
+        #quote-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1; /* Behind content */
+        }
+        .quote-floater {
+            position: absolute;
+            bottom: -150px; /* Start off-screen */
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.2);
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+            white-space: nowrap;
+            user-select: none;
+            animation: float-up linear infinite;
+        }
+        @keyframes float-up {
+            0% {
+                transform: translateY(0vh);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-120vh); /* End off-screen */
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div id="quote-container"></div>
+
+    <div class="w-full max-w-5xl text-center relative z-10">
+        <h1 class="text-4xl md:text-6xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-sky-400">Smile Rewards AI</h1>
+        <p class="text-xl text-amber-300 italic mb-4">"Every smile makes you a day younger."</p>
+        <p class="text-lg text-gray-400 mb-6">Featuring a ✨ Gemini-Powered Motivational Coach!</p>
+
+        <div id="status-box" class="mb-4 p-3 rounded-lg bg-gray-800 text-gray-300 transition-all duration-300">
+            <p id="status-message">Initializing... Please wait for the models to load.</p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row items-center justify-center gap-8 w-full">
+            <div class="video-container bg-gray-800 shadow-2xl">
+                <video id="video" autoplay muted playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+
+            <div class="flex flex-col items-center gap-4 w-full lg:w-96">
+                <div class="grid grid-cols-2 gap-4 w-full">
+                    <div class="bg-gray-800 p-6 rounded-2xl shadow-2xl text-center">
+                        <h2 class="text-lg font-bold text-teal-300 mb-1">POINTS</h2>
+                        <p id="points" class="text-6xl font-black glowing-text">0</p>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-2xl shadow-2xl text-center">
+                        <h2 class="text-lg font-bold text-sky-400 mb-1">SMILE STREAK</h2>
+                        <p id="streak" class="text-6xl font-black">🔥 0</p>
+                    </div>
+                </div>
+
+                <div class="w-full bg-gray-700 rounded-full h-8">
+                    <div id="smile-meter-bar" class="bg-gradient-to-r from-teal-400 to-blue-500 h-8 rounded-full text-center text-white font-bold leading-8" style="width: 0%">
+                        <span id="smile-meter-text">Smile!</span>
+                    </div>
+                </div>
+                
+                <button id="startButton" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    Start Camera
+                </button>
+                <button id="coachButton" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    You Can Do Anything and Everything (whats the mood)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Quote Modal -->
+    <div id="quoteModal" class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div class="modal-content bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-lg w-full text-center transform scale-95">
+            <h3 class="text-2xl font-bold text-teal-300 mb-4">Your AI Motivational Coach says...</h3>
+            <p id="quoteText" class="text-lg text-gray-300 italic">"Generating your daily dose of sunshine..."</p>
+            <button onclick="closeQuoteModal()" class="mt-6 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg">Awesome!</button>
+        </div>
+    </div>
+    
+    <!-- AI Cheer-Up Coach Modal -->
+    <div id="coachModal" class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div class="modal-content bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-lg w-full text-center transform scale-95">
+            <h3 class="text-2xl font-bold text-purple-400 mb-4">You Can Do Anything and Everything</h3>
+            <p class="text-gray-400 mb-4">Tell your AI coach what's on your mind.</p>
+            <input id="feelingInput" type="text" class="w-full bg-gray-700 text-white rounded-lg p-2 mb-4 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g., I'm feeling stressed about work...">
+            <div id="coachResponseResult" class="hidden mt-4 p-4 bg-gray-900 rounded-lg text-left">
+                <p id="coachResponseText" class="text-gray-300 whitespace-pre-wrap"></p>
+            </div>
+            <div class="flex gap-4 mt-4">
+                 <button id="getCoachResponseButton" onclick="getCheerUpResponse()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">Get Advice</button>
+                 <button onclick="closeCoachModal()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const pointsEl = document.getElementById('points');
+        const streakEl = document.getElementById('streak');
+        const statusMessageEl = document.getElementById('status-message');
+        const startButton = document.getElementById('startButton');
+        const coachButton = document.getElementById('coachButton');
+        const smileMeterBar = document.getElementById('smile-meter-bar');
+        const smileMeterText = document.getElementById('smile-meter-text');
+        const quoteModal = document.getElementById('quoteModal');
+        const quoteText = document.getElementById('quoteText');
+        const coachModal = document.getElementById('coachModal');
+        const feelingInput = document.getElementById('feelingInput');
+        const coachResponseResult = document.getElementById('coachResponseResult');
+        const coachResponseText = document.getElementById('coachResponseText');
+        const getCoachResponseButton = document.getElementById('getCoachResponseButton');
+
+        // App State
+        let rewardPoints = 0;
+        let smileStreak = 0;
+        let lastSmileDate = null;
+        let smileCooldown = false;
+        let detectionInterval;
+        const SMILE_THRESHOLD = 0.80;
+
+        // --- 1. GEMINI API INTEGRATION ---
+        
+        async function callGemini(prompt) {
+            const apiKey = ""; // Leave empty, handled by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    return "Sorry, I couldn't think of anything right now. Try again!";
+                }
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                return "An error occurred while contacting the AI. Please check the console.";
+            }
+        }
+        
+        async function getMotivationalQuote() {
+            openQuoteModal();
+            quoteText.textContent = "Generating your daily dose of sunshine...";
+            const prompt = "Write a short, powerful, and unique motivational quote about the positive impact of smiling. Make it uplifting.";
+            const generatedQuote = await callGemini(prompt);
+            quoteText.textContent = generatedQuote;
+        }
+
+        async function getCheerUpResponse() {
+            const feeling = feelingInput.value.trim();
+            if (!feeling) {
+                const originalPlaceholder = feelingInput.placeholder;
+                feelingInput.placeholder = "Please tell me how you're feeling first!";
+                setTimeout(() => { feelingInput.placeholder = originalPlaceholder; }, 2000);
+                return;
+            }
+            getCoachResponseButton.disabled = true;
+            getCoachResponseButton.textContent = "Thinking...";
+            coachResponseResult.classList.add('hidden');
+            const prompt = `You are an AI friend and motivational coach named 'Sparky'. A user is feeling: "${feeling}". Respond with a short, kind, and uplifting message (2-4 sentences) to help cheer them up. Be empathetic and positive. Do not give medical advice. End with an encouraging closing like 'You've got this!' or 'Keep shining!'.`;
+            const generatedResponse = await callGemini(prompt);
+            coachResponseText.textContent = generatedResponse;
+            coachResponseResult.classList.remove('hidden');
+            getCoachResponseButton.disabled = false;
+            getCoachResponseButton.textContent = "Get Advice";
+        }
+
+        // --- 2. MODEL LOADING AND WEBCAM SETUP ---
+        async function loadModels() {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+            try {
+                statusMessageEl.textContent = 'Loading AI models...';
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+                ]);
+                statusMessageEl.textContent = 'Models loaded. Ready to start!';
+                startButton.disabled = false;
+                coachButton.disabled = false;
+            } catch (error) {
+                console.error("Error loading models:", error);
+                statusMessageEl.textContent = 'Error loading models. Please refresh the page.';
+            }
+        }
+        
+        async function startWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+                video.srcObject = stream;
+                statusMessageEl.textContent = 'Camera started. Looking for a face...';
+            } catch (err) {
+                console.error("Error accessing webcam:", err);
+                statusMessageEl.textContent = 'Could not access camera. Please grant permission.';
+            }
+        }
+
+        // --- 3. CORE APP LOGIC ---
+        function startFaceDetection() {
+            detectionInterval = setInterval(async () => {
+                if (video.paused || video.ended) return;
+                const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceExpressions();
+                const displaySize = { width: video.clientWidth, height: video.clientHeight };
+                faceapi.matchDimensions(canvas, displaySize);
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                if (detections) {
+                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                    faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+                    const happiness = resizedDetections.expressions.happy;
+                    updateSmileMeter(happiness);
+                    if (happiness > SMILE_THRESHOLD && !smileCooldown) {
+                        handleGoodSmile(happiness);
+                    }
+                } else {
+                    statusMessageEl.textContent = 'No face detected.';
+                    updateSmileMeter(0);
+                }
+            }, 300);
+        }
+
+        function updateSmileMeter(happiness) {
+            const percentage = Math.min(100, (happiness / SMILE_THRESHOLD) * 100);
+            smileMeterBar.style.width = `${percentage}%`;
+            smileMeterText.textContent = `Smile Meter: ${Math.round(percentage)}%`;
+        }
+
+        function handleGoodSmile(happiness) {
+            smileCooldown = true;
+            const pointsAwarded = 5 + Math.round((happiness - SMILE_THRESHOLD) * 50);
+            rewardPoints += pointsAwarded;
+            const today = new Date().toDateString();
+            if (lastSmileDate !== today) {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const isNewStreak = lastSmileDate !== yesterday.toDateString();
+                smileStreak = isNewStreak ? 1 : smileStreak + 1;
+                lastSmileDate = today;
+                if (smileStreak > 0) getMotivationalQuote();
+            }
+            pointsEl.textContent = rewardPoints;
+            pointsEl.classList.add('point-pop');
+            streakEl.innerHTML = `🔥 ${smileStreak}`;
+            statusMessageEl.textContent = `Awesome! +${pointsAwarded} Points!`;
+            sendNotification(pointsAwarded, smileStreak);
+            setTimeout(() => pointsEl.classList.remove('point-pop'), 500);
+            setTimeout(() => { smileCooldown = false; }, 3000);
+        }
+
+        // --- 4. NOTIFICATIONS ---
+        
+        function requestNotificationPermission() {
+            if ("Notification" in window && Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
+        }
+
+        function sendNotification(points, streak) {
+            if (Notification.permission === "granted") {
+                const body = streak > 1 ? `You earned ${points} points! You're on a ${streak}-day streak! 🔥` : `You earned ${points} points for that great smile!`;
+                new Notification('Smile Reward!', { body, icon: 'https://placehold.co/192x192/2dd4bf/ffffff?text=😊' });
+            }
+        }
+
+        // --- 5. UI AND EVENT HANDLERS ---
+        function openQuoteModal() {
+            quoteModal.classList.remove('opacity-0', 'pointer-events-none');
+            quoteModal.querySelector('.modal-content').classList.remove('scale-95');
+        }
+
+        function closeQuoteModal() {
+            quoteModal.classList.add('opacity-0', 'pointer-events-none');
+            quoteModal.querySelector('.modal-content').classList.add('scale-95');
+        }
+        
+        function openCoachModal() {
+            coachModal.classList.remove('opacity-0', 'pointer-events-none');
+            coachModal.querySelector('.modal-content').classList.remove('scale-95');
+        }
+
+        function closeCoachModal() {
+            coachModal.classList.add('opacity-0', 'pointer-events-none');
+            coachModal.querySelector('.modal-content').classList.add('scale-95');
+            coachResponseResult.classList.add('hidden');
+            feelingInput.value = '';
+        }
+        
+        /**
+         * ✨ Creates the floating quotes background animation.
+         */
+        function createBackgroundQuotes() {
+            const container = document.getElementById('quote-container');
+            const quotes = [
+                "Keep smiling, it's contagious.",
+                "You are stronger than you think.",
+                "Believe you can and you're halfway there.",
+                "The best is yet to come.",
+                "Every day is a new beginning.",
+                "You've got this!",
+                "Shine bright like a diamond.",
+                "Dream big, work hard.",
+                "Positivity is a superpower.",
+                "Be the reason someone smiles today.",
+                "Create your own sunshine.",
+                "Start each day with a grateful heart."
+            ];
+            const quoteCount = 15;
+
+            for (let i = 0; i < quoteCount; i++) {
+                const quoteEl = document.createElement('div');
+                quoteEl.classList.add('quote-floater');
+                quoteEl.textContent = quotes[Math.floor(Math.random() * quotes.length)];
+                
+                quoteEl.style.left = `${Math.random() * 100}vw`;
+                quoteEl.style.animationDuration = `${Math.random() * 20 + 15}s`; // 15s to 35s
+                quoteEl.style.animationDelay = `${Math.random() * 20}s`; // 0s to 20s
+
+                container.appendChild(quoteEl);
+            }
+        }
+
+        startButton.addEventListener('click', () => {
+            requestNotificationPermission(); // Ask for permission for in-app notifications
+            startWebcam();
+            startButton.textContent = "Camera On";
+            startButton.disabled = true;
+        });
+        
+        coachButton.addEventListener('click', openCoachModal);
+        
+        video.addEventListener('play', startFaceDetection);
+        video.addEventListener('pause', () => clearInterval(detectionInterval));
+        
+        // --- Initial Calls ---
+        createBackgroundQuotes();
+        loadModels();
+    </script>
+    
+</body>
+</html>
